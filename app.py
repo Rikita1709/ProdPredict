@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import matplotlib.pyplot as plt
+
 
 # Load trained model
 model = joblib.load("productivity_model.pkl")
@@ -98,3 +100,25 @@ if st.button("Analyze My Productivity 🚀"):
     optimal_sleep, improved_score = suggest_improvement(sleep, study, mood, stress)
     st.markdown("### 📈 Optimization Suggestion")
     st.write(f"If you increase sleep to {optimal_sleep} hours, predicted productivity becomes {round(improved_score,2)}")
+    st.markdown("## 📊 Productivity Analytics Dashboard")
+
+    # Load dataset
+    df = pd.read_csv("final_productivity_dataset.csv")
+
+    # Graph 1: Sleep vs Productivity
+    fig1, ax1 = plt.subplots()
+    ax1.scatter(df["Sleep_Hours"], df["Productivity_Score"])
+    ax1.set_xlabel("Sleep Hours")
+    ax1.set_ylabel("Productivity Score")
+    ax1.set_title("Sleep vs Productivity")
+
+    st.pyplot(fig1)
+
+    # Graph 2: Stress vs Productivity
+    fig2, ax2 = plt.subplots()
+    ax2.scatter(df["Stress_Level"], df["Productivity_Score"])
+    ax2.set_xlabel("Stress Level")
+    ax2.set_ylabel("Productivity Score")
+    ax2.set_title("Stress vs Productivity")
+
+    st.pyplot(fig2)
