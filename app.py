@@ -115,7 +115,7 @@ if st.button("Analyze My Productivity 🚀"):
     st.pyplot(fig1, use_container_width=False)
 
     # Graph 2: Stress vs Productivity
-   fig2, ax2 = plt.subplots(figsize=(3,2))
+    fig2, ax2 = plt.subplots(figsize=(3,2))
     ax2.scatter(df["Stress_Level"], df["Productivity_Score"])
     ax2.set_xlabel("Stress Level")
     ax2.set_ylabel("Productivity Score")
