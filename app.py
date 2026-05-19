@@ -106,7 +106,7 @@ if st.button("Analyze My Productivity 🚀"):
     df = pd.read_csv("final_productivity_dataset.csv")
 
     # Graph 1: Sleep vs Productivity
-    fig1, ax1 = plt.subplots()
+    fig1, ax1 = plt.subplots(figsize=(5,3))
     ax1.scatter(df["Sleep_Hours"], df["Productivity_Score"])
     ax1.set_xlabel("Sleep Hours")
     ax1.set_ylabel("Productivity Score")
@@ -115,7 +115,7 @@ if st.button("Analyze My Productivity 🚀"):
     st.pyplot(fig1)
 
     # Graph 2: Stress vs Productivity
-    fig2, ax2 = plt.subplots()
+    fig2, ax2 = plt.subplots(figsize=(5,3))
     ax2.scatter(df["Stress_Level"], df["Productivity_Score"])
     ax2.set_xlabel("Stress Level")
     ax2.set_ylabel("Productivity Score")
