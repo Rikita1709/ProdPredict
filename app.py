@@ -2,10 +2,18 @@ import streamlit as st
 import pandas as pd
 import joblib
 import matplotlib.pyplot as plt
+from groq import Groq
 
 
 # Load trained model
 model = joblib.load("productivity_model.pkl")
+
+try:
+    client = Groq(
+        api_key=st.secrets["GROQ_API_KEY"]
+    )
+except Exception:
+    client = None
 
 st.set_page_config(page_title="AI Productivity Analyzer", layout="wide")
 
@@ -55,6 +63,50 @@ def suggest_improvement(sleep, study, mood, stress):
             best_sleep = extra_sleep
 
     return best_sleep, best_productivity
+# ---------- AI Wellness Coach ----------
+def ai_wellness_coach(sleep, study, mood, stress, productivity, risk):
+
+    if client is None:
+        return "⚠️ AI Coach is unavailable. Please add your GROQ_API_KEY in Streamlit Secrets."
+
+    prompt = f"""
+You are an AI Wellness Coach.
+
+Analyze the following student data:
+
+Sleep Hours: {sleep}
+Study Hours: {study}
+Mood Score: {mood}/10
+Stress Level: {stress}/10
+Predicted Productivity: {round(productivity,2)}
+Burnout Risk: {risk}
+
+Explain:
+
+1. Why the productivity score is this value.
+2. Whether burnout is likely.
+3. Give 5 personalized improvement suggestions.
+4. Suggest an ideal routine for tomorrow.
+5. End with one motivational sentence.
+
+Keep the answer friendly and under 180 words.
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an expert productivity and wellness coach."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+
+    return response.choices[0].message.content
 
 # ---------- Input Section ----------
 col1, col2 = st.columns(2)
@@ -76,7 +128,34 @@ if st.button("Analyze My Productivity 🚀"):
     input_data = [[sleep, study, mood, stress, energy]]
     prediction = model.predict(input_data)[0]
 
-    st.success(f"Predicted Productivity Score: {round(prediction,2)}")
+    # ---------- Dashboard Metrics ----------
+st.markdown("## 📊 Dashboard")
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        label="📈 Productivity",
+        value=f"{round(prediction,2)}/10"
+    )
+
+with col2:
+    st.metric(
+        label="😴 Sleep",
+        value=f"{sleep} hrs"
+    )
+
+with col3:
+    st.metric(
+        label="😟 Stress",
+        value=f"{stress}/10"
+    )
+
+with col4:
+    st.metric(
+        label="⚡ Energy",
+        value=f"{energy}/10"
+    )
 
     # Productivity Category
     if prediction >= 8:
@@ -90,17 +169,46 @@ if st.button("Analyze My Productivity 🚀"):
     risk = burnout_risk(sleep, stress, prediction)
     st.markdown("### 🧯 Burnout Risk Assessment")
     st.write(risk)
+    # ---------- Burnout Meter ----------
+st.markdown("### 📉 Burnout Level")
+
+if "Low" in risk:
+    st.progress(20)
+
+elif "Moderate" in risk:
+    st.progress(60)
+
+else:
+    st.progress(100)
 
     # Advice
     advice = generate_ai_advice(sleep, stress)
     st.markdown("### 💡 Personalized AI Advice")
-    st.write(advice)
+    st.info(advice)
 
     # Optimization Suggestion
     optimal_sleep, improved_score = suggest_improvement(sleep, study, mood, stress)
     st.markdown("### 📈 Optimization Suggestion")
+    st.markdown("### 🎯 Productivity Level")
+
+    st.progress(int(prediction * 10))
     st.write(f"If you increase sleep to {optimal_sleep} hours, predicted productivity becomes {round(improved_score,2)}")
     st.markdown("## 📊 Productivity Analytics Dashboard")
+    # ---------- AI Wellness Coach ----------
+    st.markdown("## 🤖 AI Wellness Coach")
+
+    with st.spinner("Analyzing your wellness using Llama 3..."):
+
+        coach_response = ai_wellness_coach(
+        sleep,
+        study,
+        mood,
+        stress,
+        prediction,
+        risk
+    )
+
+    st.success(coach_response)
 
     # Load dataset
     df = pd.read_csv("final_productivity_dataset.csv")
@@ -112,7 +220,7 @@ if st.button("Analyze My Productivity 🚀"):
     ax1.set_ylabel("Productivity Score")
     ax1.set_title("Sleep vs Productivity")
 
-    st.pyplot(fig1, use_container_width=False)
+    
 
     # Graph 2: Stress vs Productivity
     fig2, ax2 = plt.subplots(figsize=(3,2))
@@ -121,4 +229,87 @@ if st.button("Analyze My Productivity 🚀"):
     ax2.set_ylabel("Productivity Score")
     ax2.set_title("Stress vs Productivity")
 
-    st.pyplot(fig2, use_container_width=False)
+    graph1, graph2 = st.columns(2)
+
+with graph1:
+    st.pyplot(fig1)
+
+with graph2:
+    st.pyplot(fig2)
+    # ---------- AI Chat Assistant ----------
+st.markdown("---")
+st.markdown("## 💬 Chat with AI Wellness Coach")
+
+# Store conversation history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display previous messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat input
+user_question = st.chat_input("Ask anything about your productivity, stress, studies or wellness...")
+
+if user_question:
+
+    # Show user message
+    st.session_state.messages.append(
+        {"role": "user", "content": user_question}
+    )
+
+    with st.chat_message("user"):
+        st.markdown(user_question)
+
+    # Create prompt using current prediction
+    prompt = f"""
+You are an AI Productivity and Wellness Coach.
+
+Current User Data:
+Sleep Hours: {sleep}
+Study Hours: {study}
+Mood Score: {mood}
+Stress Level: {stress}
+Predicted Productivity: {round(prediction,2)}
+Burnout Risk: {risk}
+
+User Question:
+{user_question}
+
+Answer in a friendly, practical and motivational way.
+"""
+
+    if client is None:
+        answer = "⚠️ Please configure your GROQ_API_KEY."
+    else:
+
+        with st.spinner("Thinking..."):
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful AI Wellness Coach."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+
+            answer = response.choices[0].message.content
+
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer}
+    )
+
+    with st.chat_message("assistant"):
+        st.markdown(answer)
+        st.markdown("---")
+
+st.caption(
+    "Developed by Rikita Maiti | AI-Based Burnout Detection & Productivity Optimization System | Powered by Random Forest + Llama 3"
+)
