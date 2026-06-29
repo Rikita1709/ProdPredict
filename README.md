@@ -8,9 +8,12 @@ An AI-powered machine learning web application that predicts productivity, detec
 
 This project focuses on analyzing human behavioral patterns such as sleep, stress, mood, study habits, and energy levels to predict productivity and identify possible burnout risks.
 
-Unlike traditional productivity tools that only manage tasks, this system integrates machine learning, behavioral analytics, and AI-generated recommendations to help users improve both productivity and mental well-being.
+Unlike traditional productivity tools that only manage tasks, this system integrates machine learning, behavioral analytics, and AI-generated recommendations to help users improve both productivity and mental well-being 
+
+consists of an AI wellness coach and an interactive AI chat assistant powered by Llama 3 via Groq.
 
 The application is deployed as an interactive web app using Streamlit.
+
 
 ---
 
@@ -21,6 +24,7 @@ The application is deployed as an interactive web app using Streamlit.
 ✅ Personalized AI Advice  
 ✅ Productivity Optimization Suggestions  
 ✅ Interactive Web Interface  
+✅ AI Wellness Coach (Llama 3 via Groq)
 ✅ Analytics Dashboard with Visualizations  
 ✅ Real-Time Predictions  
 ✅ Live Deployment using Streamlit Cloud  
@@ -148,6 +152,8 @@ Implemented using:
 - Matplotlib
 - Joblib
 - Streamlit
+- Groq API
+- Llama 3.3
 
 ---
 
