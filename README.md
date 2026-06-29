@@ -24,8 +24,8 @@ The application is deployed as an interactive web app using Streamlit.
 ✅ Personalized AI Advice  
 ✅ Productivity Optimization Suggestions  
 ✅ Interactive Web Interface  
-✅ AI Wellness Coach (Llama 3 via Groq)
 ✅ Analytics Dashboard with Visualizations  
+✅ AI Wellness Coach (Llama 3 via Groq)
 ✅ Real-Time Predictions  
 ✅ Live Deployment using Streamlit Cloud  
 
