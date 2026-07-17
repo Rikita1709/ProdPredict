@@ -4,37 +4,60 @@ import joblib
 import matplotlib.pyplot as plt
 from groq import Groq
 
-# -------------------------------
-# Load ML Model
-# -------------------------------
-model = joblib.load("productivity_model.pkl")
-
-# -------------------------------
-# Initialize Groq Client
-# -------------------------------
-try:
-    client = Groq(
-        api_key=st.secrets["GROQ_API_KEY"]
-    )
-except Exception:
-    client = None
-
-# -------------------------------
+# ----------------------------
 # Streamlit Page Configuration
-# -------------------------------
+# ----------------------------
 st.set_page_config(
     page_title="AI Productivity Analyzer",
     page_icon="🧠",
     layout="wide"
 )
 
-st.title("🧠 AI-Based Burnout Detection & Productivity Optimization System")
-st.markdown(
-    "Enter your daily lifestyle statistics to predict productivity, assess burnout risk, and receive AI-powered wellness guidance."
-)
+# ----------------------------
+# Load ML Model
+# ----------------------------
+model = joblib.load("productivity_model.pkl")
 
+# ----------------------------
+# Load Dataset
+# ----------------------------
+df = pd.read_csv("final_productivity_dataset.csv")
+
+# ----------------------------
+# Connect to Groq API
+# ----------------------------
+try:
+    client = Groq(
+        api_key=st.secrets["GROQ_API_KEY"]
+    )
+    st.success("Groq client initialized")
+except Exception as e:
+    st.error(f"Groq Error: {e}")
+    client = None
+
+# ----------------------------
+# Session State
+# ----------------------------
+if "prediction" not in st.session_state:
+    st.session_state.prediction = None
+
+if "risk" not in st.session_state:
+    st.session_state.risk = None
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# ----------------------------
+# Title
+# ----------------------------
+st.title("🧠 AI-Based Burnout Detection & Productivity Optimization System")
+
+st.markdown(
+    "Predict productivity, detect burnout risk, receive AI-powered wellness advice, "
+    "and chat with an intelligent wellness coach."
+)
 # ==========================================================
-# AI Advice Function
+# RULE-BASED AI ADVICE
 # ==========================================================
 
 def generate_ai_advice(sleep, stress):
@@ -42,89 +65,77 @@ def generate_ai_advice(sleep, stress):
     advice = []
 
     if sleep < 6:
-        advice.append(
-            "😴 Try increasing your sleep to improve concentration and energy."
-        )
+        advice.append("😴 Increase your sleep duration to improve concentration and recovery.")
 
     if stress > 6:
-        advice.append(
-            "🧘 Practice meditation, breathing exercises, or take regular breaks."
-        )
+        advice.append("🧘 Practice meditation, deep breathing or take regular short breaks.")
 
-    if not advice:
-        advice.append(
-            "✅ Your routine looks healthy. Keep maintaining this balance."
-        )
+    if sleep >= 7 and stress <= 5:
+        advice.append("✅ Maintain your current lifestyle. Your routine looks balanced.")
+
+    if len(advice) == 0:
+        advice.append("Keep maintaining healthy daily habits.")
 
     return " ".join(advice)
 
+
 # ==========================================================
-# Burnout Risk Function
+# BURNOUT RISK
 # ==========================================================
 
 def burnout_risk(sleep, stress, productivity):
 
-    risk_score = 0
+    score = 0
 
     if sleep < 5:
-        risk_score += 2
+        score += 2
 
     if stress > 7:
-        risk_score += 2
+        score += 2
 
     if productivity < 4:
-        risk_score += 2
+        score += 2
 
-    if risk_score >= 4:
+    if score >= 4:
         return "High Burnout Risk 🚨"
 
-    elif risk_score >= 2:
+    elif score >= 2:
         return "Moderate Burnout Risk ⚠️"
 
     else:
         return "Low Burnout Risk ✅"
 
+
 # ==========================================================
-# Productivity Optimization
+# PRODUCTIVITY OPTIMIZATION
 # ==========================================================
 
 def suggest_improvement(sleep, study, mood, stress):
 
-    best_productivity = 0
     best_sleep = sleep
+    best_score = 0
 
-    for extra_sleep in range(int(sleep), 10):
+    for hrs in range(int(sleep), 10):
 
-        energy_sim = max(
-            1,
-            min(10, int(extra_sleep - (stress * 0.3)))
-        )
+        energy = max(1, min(10, int(hrs - (stress * 0.3))))
 
-        pred = model.predict(
-            [[extra_sleep, study, mood, stress, energy_sim]]
-        )[0]
+        pred = model.predict([[hrs, study, mood, stress, energy]])[0]
 
-        if pred > best_productivity:
-            best_productivity = pred
-            best_sleep = extra_sleep
+        if pred > best_score:
+            best_score = pred
+            best_sleep = hrs
 
-    return best_sleep, best_productivity
+    return best_sleep, best_score
+
 
 # ==========================================================
-# AI Wellness Coach
+# AI WELLNESS COACH
 # ==========================================================
 
-def ai_wellness_coach(
-    sleep,
-    study,
-    mood,
-    stress,
-    productivity,
-    risk
-):
+def ai_wellness_coach(sleep, study, mood, stress, productivity, risk):
 
     if client is None:
-        return "⚠️ Groq API Key not found. Please configure Streamlit Secrets."
+        return "⚠️ Groq API Key not found. Add GROQ_API_KEY inside Streamlit Secrets."
 
     prompt = f"""
 You are an expert AI Wellness Coach.
@@ -138,39 +149,78 @@ Stress Level : {stress}/10
 Predicted Productivity : {round(productivity,2)}
 Burnout Risk : {risk}
 
-Please answer in under 180 words.
+Explain:
 
-Include:
-
-1. Explain why the productivity score is this value.
-2. Explain the burnout risk.
-3. Give 5 personalized improvement tips.
-4. Suggest an ideal routine for tomorrow.
+1. Why this productivity score occurred.
+2. Explain burnout risk.
+3. Give 5 personalized suggestions.
+4. Suggest tomorrow's routine.
 5. End with one motivational sentence.
+
+Keep response under 180 words.
 """
 
     response = client.chat.completions.create(
+
         model="llama-3.3-70b-versatile",
+
         messages=[
+
             {
                 "role": "system",
-                "content": "You are an expert productivity coach."
+                "content": "You are an expert productivity and wellness coach."
             },
+
             {
                 "role": "user",
                 "content": prompt
             }
+
         ]
+
+    )
+
+    return response.choices[0].message.content
+
+
+# ==========================================================
+# AI CHAT
+# ==========================================================
+
+def ask_ai(question):
+
+    if client is None:
+        return "⚠️ Groq API Key not configured."
+
+    response = client.chat.completions.create(
+
+        model="llama-3.3-70b-versatile",
+
+        messages=[
+
+            {
+                "role": "system",
+                "content": "You are a helpful AI Productivity Coach. Answer student questions related to studies, productivity, burnout, stress management and wellness."
+            },
+
+            {
+                "role": "user",
+                "content": question
+            }
+
+        ]
+
     )
 
     return response.choices[0].message.content
 # ==========================================================
-# INPUT SECTION
+# USER INPUT
 # ==========================================================
 
 col1, col2 = st.columns(2)
 
 with col1:
+
     sleep = st.slider(
         "😴 Sleep Hours",
         0.0,
@@ -186,7 +236,7 @@ with col1:
     )
 
     mood = st.slider(
-        "😊 Mood Score (1-10)",
+        "😊 Mood Score",
         1,
         10,
         5
@@ -195,13 +245,11 @@ with col1:
 with col2:
 
     stress = st.slider(
-        "😟 Stress Level (1-10)",
+        "😟 Stress Level",
         1,
         10,
         5
     )
-
-# Automatically calculate Energy
 
 energy = max(
     1,
@@ -212,7 +260,7 @@ energy = max(
 )
 
 # ==========================================================
-# PREDICTION BUTTON
+# ANALYZE BUTTON
 # ==========================================================
 
 if st.button("🚀 Analyze My Productivity"):
@@ -227,66 +275,21 @@ if st.button("🚀 Analyze My Productivity"):
 
     prediction = model.predict(input_data)[0]
 
-    # ======================================================
-    # DASHBOARD
-    # ======================================================
-
-    st.markdown("---")
-    st.subheader("📊 Productivity Dashboard")
-
-    m1, m2, m3, m4 = st.columns(4)
-
-    with m1:
-        st.metric(
-            "📈 Productivity",
-            f"{round(prediction,2)}/10"
-        )
-
-    with m2:
-        st.metric(
-            "😴 Sleep",
-            f"{sleep} hrs"
-        )
-
-    with m3:
-        st.metric(
-            "😟 Stress",
-            f"{stress}/10"
-        )
-
-    with m4:
-        st.metric(
-            "⚡ Energy",
-            f"{energy}/10"
-        )
-
-    st.markdown("---")
-
-    # ======================================================
-    # PRODUCTIVITY CATEGORY
-    # ======================================================
+    st.success(
+        f"Predicted Productivity Score: {round(prediction,2)}/10"
+    )
 
     if prediction >= 8:
 
-        st.success(
-            "🔥 Excellent productivity expected!"
-        )
+        st.success("🔥 Excellent productivity expected!")
 
     elif prediction >= 5:
 
-        st.warning(
-            "🙂 Moderate productivity. A few improvements can boost your performance."
-        )
+        st.warning("🙂 Moderate productivity. Manage stress and energy wisely.")
 
     else:
 
-        st.error(
-            "⚠️ Low productivity predicted. Focus on improving sleep and reducing stress."
-        )
-
-    # ======================================================
-    # BURNOUT RISK
-    # ======================================================
+        st.error("⚠ Low productivity expected. Improve sleep and reduce stress.")
 
     risk = burnout_risk(
         sleep,
@@ -294,25 +297,8 @@ if st.button("🚀 Analyze My Productivity"):
         prediction
     )
 
-    st.subheader("🧯 Burnout Risk")
-
+    st.subheader("🧯 Burnout Risk Assessment")
     st.write(risk)
-
-    if "Low" in risk:
-
-        st.progress(20)
-
-    elif "Moderate" in risk:
-
-        st.progress(60)
-
-    else:
-
-        st.progress(100)
-
-    # ======================================================
-    # PERSONALIZED ADVICE
-    # ======================================================
 
     advice = generate_ai_advice(
         sleep,
@@ -320,110 +306,159 @@ if st.button("🚀 Analyze My Productivity"):
     )
 
     st.subheader("💡 Personalized AI Advice")
+    st.write(advice)
+        # ==========================================================
+    # SAVE RESULTS
+    # ==========================================================
 
-    st.info(advice)
-    # ======================================================
-# OPTIMIZATION SUGGESTION
-# ======================================================
+    st.session_state.prediction = prediction
+    st.session_state.risk = risk
 
-optimal_sleep, improved_score = suggest_improvement(
-    sleep,
-    study,
-    mood,
-    stress
-)
+    # ==========================================================
+    # DASHBOARD
+    # ==========================================================
 
-st.subheader("📈 Productivity Optimization")
+    st.markdown("---")
+    st.subheader("📊 Productivity Dashboard")
 
-st.success(
-    f"If you increase your sleep to **{optimal_sleep} hours**, "
-    f"your predicted productivity could improve to **{round(improved_score,2)}/10**."
-)
+    c1, c2, c3, c4 = st.columns(4)
 
-st.progress(int(improved_score * 10))
+    with c1:
+        st.metric(
+            "📈 Productivity",
+            f"{round(prediction,2)}/10"
+        )
 
-# ======================================================
+    with c2:
+        st.metric(
+            "😴 Sleep",
+            f"{sleep} hrs"
+        )
+
+    with c3:
+        st.metric(
+            "😟 Stress",
+            f"{stress}/10"
+        )
+
+    with c4:
+        st.metric(
+            "⚡ Energy",
+            f"{energy}/10"
+        )
+
+    # ==========================================================
+    # OPTIMIZATION
+    # ==========================================================
+
+    optimal_sleep, improved_score = suggest_improvement(
+        sleep,
+        study,
+        mood,
+        stress
+    )
+
+    st.subheader("📈 Productivity Optimization")
+
+    st.success(
+        f"If you increase your sleep to **{optimal_sleep} hours**, "
+        f"your predicted productivity can improve to **{round(improved_score,2)}/10**."
+    )
+
+    st.progress(min(int(improved_score * 10), 100))
+
+    # ==========================================================
+    # ANALYTICS DASHBOARD
+    # ==========================================================
+
+    st.markdown("---")
+    st.subheader("📊 Productivity Analytics Dashboard")
+
+    g1, g2 = st.columns(2)
+
+    with g1:
+
+        fig1, ax1 = plt.subplots(figsize=(5,4))
+
+        ax1.scatter(
+            df["Sleep_Hours"],
+            df["Productivity_Score"],
+            alpha=0.7
+        )
+
+        ax1.set_title("Sleep vs Productivity")
+        ax1.set_xlabel("Sleep Hours")
+        ax1.set_ylabel("Productivity Score")
+
+        st.pyplot(fig1)
+
+    with g2:
+
+        fig2, ax2 = plt.subplots(figsize=(5,4))
+
+        ax2.scatter(
+            df["Stress_Level"],
+            df["Productivity_Score"],
+            alpha=0.7
+        )
+
+        ax2.set_title("Stress vs Productivity")
+        ax2.set_xlabel("Stress Level")
+        ax2.set_ylabel("Productivity Score")
+
+        st.pyplot(fig2)
+        # ==========================================================
 # AI WELLNESS COACH
-# ======================================================
+# ==========================================================
 
 st.markdown("---")
 st.subheader("🤖 AI Wellness Coach (Powered by Llama 3)")
 
-with st.spinner("🧠 AI is analyzing your lifestyle..."):
+if st.button("🧠 Generate AI Wellness Report"):
 
-    coach_response = ai_wellness_coach(
-        sleep,
-        study,
-        mood,
-        stress,
-        prediction,
-        risk
-    )
+    if client is None:
 
-st.success(coach_response)
+        st.error(
+            "Groq API Key not found. Please configure GROQ_API_KEY in Streamlit Secrets."
+        )
 
-# ======================================================
-# ANALYTICS DASHBOARD
-# ======================================================
+    elif st.session_state.prediction is None:
 
-st.markdown("---")
-st.subheader("📊 Productivity Analytics Dashboard")
+        st.warning(
+            "⚠ Please click 'Analyze My Productivity' first."
+        )
 
-df = pd.read_csv("final_productivity_dataset.csv")
+    else:
 
-graph1, graph2 = st.columns(2)
+        with st.spinner("Analyzing your lifestyle..."):
 
-# ------------------------------------------------------
-# Graph 1
-# ------------------------------------------------------
+            coach_response = ai_wellness_coach(
 
-with graph1:
+                sleep,
 
-    fig1, ax1 = plt.subplots(figsize=(5,4))
+                study,
 
-    ax1.scatter(
-        df["Sleep_Hours"],
-        df["Productivity_Score"],
-        alpha=0.7
-    )
+                mood,
 
-    ax1.set_title("Sleep vs Productivity")
-    ax1.set_xlabel("Sleep Hours")
-    ax1.set_ylabel("Productivity")
+                stress,
 
-    st.pyplot(fig1)
+                st.session_state.prediction,
 
-# ------------------------------------------------------
-# Graph 2
-# ------------------------------------------------------
+                st.session_state.risk
 
-with graph2:
+            )
 
-    fig2, ax2 = plt.subplots(figsize=(5,4))
+        st.success("AI Analysis Completed ✅")
 
-    ax2.scatter(
-        df["Stress_Level"],
-        df["Productivity_Score"],
-        alpha=0.7
-    )
-
-    ax2.set_title("Stress vs Productivity")
-    ax2.set_xlabel("Stress Level")
-    ax2.set_ylabel("Productivity")
-
-    st.pyplot(fig2)
-    # ======================================================
+        st.markdown(coach_response)
+        # ==========================================================
 # AI CHAT ASSISTANT
-# ======================================================
+# ==========================================================
 
 st.markdown("---")
 st.subheader("💬 Chat with AI Wellness Coach")
 
-# Create chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# Show previous messages
+# Display previous chat messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -435,7 +470,7 @@ user_question = st.chat_input(
 
 if user_question:
 
-    # Display user message
+    # Save & display user message
     st.session_state.messages.append(
         {
             "role": "user",
@@ -446,6 +481,7 @@ if user_question:
     with st.chat_message("user"):
         st.markdown(user_question)
 
+    # Check Groq
     if client is None:
 
         answer = (
@@ -455,45 +491,60 @@ if user_question:
 
     else:
 
+        # Use prediction if available
+        productivity = (
+            round(st.session_state.prediction, 2)
+            if st.session_state.prediction is not None
+            else "Not analyzed yet"
+        )
+
+        burnout = (
+            st.session_state.risk
+            if st.session_state.risk is not None
+            else "Unknown"
+        )
+
         prompt = f"""
 You are an AI Productivity and Wellness Coach.
 
-Current User Data
+Current user information:
 
 Sleep Hours: {sleep}
 Study Hours: {study}
 Mood Score: {mood}/10
 Stress Level: {stress}/10
 Energy Level: {energy}/10
-Predicted Productivity: {round(prediction,2)}/10
-Burnout Risk: {risk}
+Predicted Productivity: {productivity}
+Burnout Risk: {burnout}
 
-The user asked:
-
+User Question:
 {user_question}
 
-Give a practical, friendly and motivating answer.
-Keep it under 200 words.
+Answer in a friendly, motivating and practical way.
+Keep your answer under 200 words.
 """
 
-        with st.spinner("🤖 Thinking..."):
+        with st.spinner("🤖 AI is thinking..."):
 
             response = client.chat.completions.create(
+
                 model="llama-3.3-70b-versatile",
+
                 messages=[
+
                     {
                         "role": "system",
-                        "content": (
-                            "You are an expert AI Wellness Coach "
-                            "who helps students improve productivity "
-                            "and avoid burnout."
-                        )
+                        "content":
+                        "You are an expert AI Wellness Coach helping students improve productivity and reduce burnout."
                     },
+
                     {
                         "role": "user",
                         "content": prompt
                     }
+
                 ]
+
             )
 
             answer = response.choices[0].message.content
@@ -506,12 +557,13 @@ Keep it under 200 words.
         }
     )
 
+    # Display assistant response
     with st.chat_message("assistant"):
         st.markdown(answer)
 
-# ======================================================
+# ==========================================================
 # FOOTER
-# ======================================================
+# ==========================================================
 
 st.markdown("---")
 
